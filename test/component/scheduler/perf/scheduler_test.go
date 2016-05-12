@@ -26,7 +26,7 @@ import (
 
 // TestSchedule100Node3KPods schedules 3k pods on 100 nodes.
 func TestSchedule100Node100Pods(t *testing.T) {
-	schedulePods(100, 100)
+	schedulePods(1000)
 }
 
 /*
@@ -40,25 +40,33 @@ func TestSchedule1000Node30KPods(t *testing.T) {
 // This is used to learn the scheduling throughput on various
 // sizes of cluster and changes as more and more pods are scheduled.
 // It won't stop until all pods are scheduled.
-func schedulePods(numNodes, numPods int) {
+func schedulePods(numNodes int) {
 	schedulerConfigFactory, destroyFunc := mustSetupScheduler()
 	defer destroyFunc()
 	c := schedulerConfigFactory.Client
 
+	numDbPods := numNodes / 3
+	numCachePods := numNodes
+	numWebPods := numNodes
+	numPods := numDbPods + numCachePods + numWebPods
+
 	makeNodes(c, numNodes)
-	makePodsFromRC(c, "db", numPods/3)
-	makePodsFromRC(c, "cache", numPods)
-	makePodsFromRC(c, "web", numPods)
+	makePodsFromRC(c, "db", numDbPods)
+	makePodsFromRC(c, "cache", numCachePods)
+	makePodsFromRC(c, "web", numWebPods)
 
 	prev := 0
 	start := time.Now()
+	stuckCt := 0
 	for {
 		// This can potentially affect performance of scheduler, since List() is done under mutex.
 		// Listing 10000 pods is an expensive operation, so running it frequently may impact scheduler.
 		// TODO: Setup watch on apiserver and wait until all pods scheduled.
 		scheduled := schedulerConfigFactory.ScheduledPodLister.Store.List()
-		fmt.Printf("%ds\trate: %d\ttotal: %d\n", time.Since(start)/time.Second, len(scheduled)-prev, len(scheduled))
+		newLen := len(scheduled)
+		fmt.Printf("%ds\trate: %d\ttotal: %d\n", time.Since(start)/time.Millisecond, newLen-prev, len(scheduled))
 		if len(scheduled) >= numPods {
+			fmt.Printf("scheduled all.\n")
 			for _, x := range scheduled {
 				v, ok := x.(*api.Pod)
 				if ok {
@@ -69,7 +77,24 @@ func schedulePods(numNodes, numPods int) {
 			}
 			return
 		}
-		prev = len(scheduled)
+		if prev == newLen {
+			stuckCt += 1
+			if stuckCt >= 10 {
+				fmt.Printf("got stuck. stopping.\n")
+				for _, x := range scheduled {
+					v, ok := x.(*api.Pod)
+					if ok {
+						fmt.Printf("Finished scheduling\n%s : %s\n", v.Spec.Containers[0].Name, v.Spec.NodeName)
+					} else {
+						fmt.Printf("type assertion failed\n")
+					}
+				}
+				return
+			}
+		} else {
+			stuckCt = 0
+		}
+		prev = newLen
 		time.Sleep(1 * time.Second)
 	}
 }

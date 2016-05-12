@@ -30,6 +30,7 @@ import (
 	"k8s.io/kubernetes/pkg/master"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities"
 	_ "k8s.io/kubernetes/plugin/pkg/scheduler/algorithmprovider"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/factory"
 	"k8s.io/kubernetes/test/integration/framework"
@@ -61,6 +62,11 @@ func mustSetupScheduler() (schedulerConfigFactory *factory.ConfigFactory, destro
 		QPS:           5000.0,
 		Burst:         5000,
 	})
+
+	// Prioritize nodes by least requested utilization.
+	factory.RegisterPriorityFunction("LeastRequestedPriority", priorities.LeastRequestedPriority, 1)
+	// Prioritizes nodes to help achieve balanced resource usage
+	//factory.RegisterPriorityFunction("BalancedResourceAllocation", priorities.BalancedResourceAllocation, 1)
 
 	schedulerConfigFactory = factory.NewConfigFactory(c, api.DefaultSchedulerName)
 	schedulerConfig, err := schedulerConfigFactory.Create()
