@@ -18,19 +18,23 @@ package benchmark
 
 import (
 	"fmt"
+	//	"reflect"
+	api "k8s.io/kubernetes/pkg/api"
 	"testing"
 	"time"
 )
 
 // TestSchedule100Node3KPods schedules 3k pods on 100 nodes.
-func TestSchedule100Node3KPods(t *testing.T) {
-	schedulePods(100, 3000)
+func TestSchedule100Node100Pods(t *testing.T) {
+	schedulePods(100, 100)
 }
 
+/*
 // TestSchedule1000Node30KPods schedules 30k pods on 1000 nodes.
 func TestSchedule1000Node30KPods(t *testing.T) {
 	schedulePods(1000, 30000)
 }
+*/
 
 // schedulePods schedules specific number of pods on specific number of nodes.
 // This is used to learn the scheduling throughput on various
@@ -42,7 +46,9 @@ func schedulePods(numNodes, numPods int) {
 	c := schedulerConfigFactory.Client
 
 	makeNodes(c, numNodes)
-	makePodsFromRC(c, "rc1", numPods)
+	makePodsFromRC(c, "db", numPods/3)
+	makePodsFromRC(c, "cache", numPods)
+	makePodsFromRC(c, "web", numPods)
 
 	prev := 0
 	start := time.Now()
@@ -53,6 +59,14 @@ func schedulePods(numNodes, numPods int) {
 		scheduled := schedulerConfigFactory.ScheduledPodLister.Store.List()
 		fmt.Printf("%ds\trate: %d\ttotal: %d\n", time.Since(start)/time.Second, len(scheduled)-prev, len(scheduled))
 		if len(scheduled) >= numPods {
+			for _, x := range scheduled {
+				v, ok := x.(*api.Pod)
+				if ok {
+					fmt.Printf("Finished scheduling\n%s : %s\n", v.Spec.Containers[0].Name, v.Spec.NodeName)
+				} else {
+					fmt.Printf("type assertion failed\n")
+				}
+			}
 			return
 		}
 		prev = len(scheduled)

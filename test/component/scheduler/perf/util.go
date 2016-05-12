@@ -94,8 +94,8 @@ func makeNodes(c client.Interface, nodeCount int) {
 		Status: api.NodeStatus{
 			Capacity: api.ResourceList{
 				api.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
-				api.ResourceCPU:    resource.MustParse("4"),
-				api.ResourceMemory: resource.MustParse("32Gi"),
+				api.ResourceCPU:    resource.MustParse("20"),
+				api.ResourceMemory: resource.MustParse("20Gi"),
 			},
 			Phase: api.NodeRunning,
 			Conditions: []api.NodeCondition{
@@ -103,6 +103,7 @@ func makeNodes(c client.Interface, nodeCount int) {
 			},
 		},
 	}
+
 	for i := 0; i < nodeCount; i++ {
 		if _, err := c.Nodes().Create(baseNode); err != nil {
 			panic("error creating node: " + err.Error())
@@ -110,23 +111,64 @@ func makeNodes(c client.Interface, nodeCount int) {
 	}
 }
 
-func makePodSpec() api.PodSpec {
-	return api.PodSpec{
-		Containers: []api.Container{{
-			Name:  "pause",
-			Image: "gcr.io/google_containers/pause:1.0",
-			Ports: []api.ContainerPort{{ContainerPort: 80}},
-			Resources: api.ResourceRequirements{
-				Limits: api.ResourceList{
-					api.ResourceCPU:    resource.MustParse("100m"),
-					api.ResourceMemory: resource.MustParse("500Mi"),
+func makePodSpec(name string) api.PodSpec {
+	switch name {
+	case "cache":
+		return api.PodSpec{
+			Containers: []api.Container{{
+				Name:  "pod-cache",
+				Image: "gcr.io/google_containers/pause:1.0",
+				Ports: []api.ContainerPort{{ContainerPort: 80}},
+				Resources: api.ResourceRequirements{
+					Limits: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("1"),
+						api.ResourceMemory: resource.MustParse("4Gi"),
+					},
+					Requests: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("1"),
+						api.ResourceMemory: resource.MustParse("4Gi"),
+					},
 				},
-				Requests: api.ResourceList{
-					api.ResourceCPU:    resource.MustParse("100m"),
-					api.ResourceMemory: resource.MustParse("500Mi"),
+			}},
+		}
+	case "web":
+		return api.PodSpec{
+			Containers: []api.Container{{
+				Name:  "pod-web",
+				Image: "gcr.io/google_containers/pause:1.0",
+				Ports: []api.ContainerPort{{ContainerPort: 80}},
+				Resources: api.ResourceRequirements{
+					Limits: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("4"),
+						api.ResourceMemory: resource.MustParse("4Gi"),
+					},
+					Requests: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("4"),
+						api.ResourceMemory: resource.MustParse("4Gi"),
+					},
 				},
-			},
-		}},
+			}},
+		}
+	case "db":
+		return api.PodSpec{
+			Containers: []api.Container{{
+				Name:  "pod-db",
+				Image: "gcr.io/google_containers/pause:1.0",
+				Ports: []api.ContainerPort{{ContainerPort: 80}},
+				Resources: api.ResourceRequirements{
+					Limits: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("8"),
+						api.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					Requests: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("8"),
+						api.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			}},
+		}
+	default:
+		panic("unrecognized container requested")
 	}
 }
 
@@ -144,7 +186,7 @@ func makePodsFromRC(c client.Interface, name string, podCount int) {
 				ObjectMeta: api.ObjectMeta{
 					Labels: map[string]string{"name": name},
 				},
-				Spec: makePodSpec(),
+				Spec: makePodSpec(name),
 			},
 		},
 	}
@@ -157,7 +199,7 @@ func makePodsFromRC(c client.Interface, name string, podCount int) {
 			GenerateName: "scheduler-test-pod-",
 			Labels:       map[string]string{"name": name},
 		},
-		Spec: makePodSpec(),
+		Spec: makePodSpec(name),
 	}
 	createPod := func(i int) {
 		for {

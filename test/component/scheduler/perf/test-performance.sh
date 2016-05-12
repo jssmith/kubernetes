@@ -40,10 +40,13 @@ kube::log::status "performance test start"
 # We are using the benchmark suite to do profiling. Because it only runs a few pods and
 # theoretically it has less variance.
 if ${RUN_BENCHMARK:-false}; then
+  kube::log::status "benchmark"
   go test -c -o "perf.test"
   "./perf.test" -test.bench=. -test.run=xxxx -test.cpuprofile=prof.out
   kube::log::status "benchmark tests finished"
 fi
+
+kube::log::status "density test start"
 # Running density tests. It might take a long time.
-go test -test.run=. -test.timeout=60m
+go test -test.run=. -test.timeout=60m -test.v=true
 kube::log::status "density tests finished"
