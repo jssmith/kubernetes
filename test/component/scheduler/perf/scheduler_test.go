@@ -45,18 +45,23 @@ func schedulePods(numNodes int) {
 	defer destroyFunc()
 	c := schedulerConfigFactory.Client
 
-	numDbPods := numNodes / 3
-	numCachePods := numNodes
-	numWebPods := numNodes
-	numPods := numDbPods + numCachePods + numWebPods
+	f := 4.5
+	numDbPods := int(float64(2*numNodes) / f)
+	numCachePods := int(float64(6*numNodes) / f)
+	numWebPods := int(float64(6*numNodes) / f)
+	numWafPods := int(float64(2*numNodes) / f)
+	numSparkPods := int(float64(6*numNodes) / f)
+	numPods := numDbPods + numCachePods + numWebPods + numWafPods + numSparkPods
 
 	makeNodes(c, numNodes)
+	start := time.Now()
 	makePodsFromRC(c, "db", numDbPods)
+	makePodsFromRC(c, "spark", numSparkPods)
+	makePodsFromRC(c, "waf", numWafPods)
 	makePodsFromRC(c, "cache", numCachePods)
 	makePodsFromRC(c, "web", numWebPods)
 
 	prev := 0
-	start := time.Now()
 	stuckCt := 0
 	for {
 		// This can potentially affect performance of scheduler, since List() is done under mutex.

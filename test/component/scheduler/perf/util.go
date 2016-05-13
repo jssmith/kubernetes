@@ -66,7 +66,7 @@ func mustSetupScheduler() (schedulerConfigFactory *factory.ConfigFactory, destro
 	// Prioritize nodes by least requested utilization.
 	factory.RegisterPriorityFunction("LeastRequestedPriority", priorities.LeastRequestedPriority, 1)
 	// Prioritizes nodes to help achieve balanced resource usage
-	//factory.RegisterPriorityFunction("BalancedResourceAllocation", priorities.BalancedResourceAllocation, 1)
+	factory.RegisterPriorityFunction("BalancedResourceAllocation", priorities.BalancedResourceAllocation, 1)
 
 	schedulerConfigFactory = factory.NewConfigFactory(c, api.DefaultSchedulerName)
 	schedulerConfig, err := schedulerConfigFactory.Create()
@@ -90,18 +90,37 @@ func mustSetupScheduler() (schedulerConfigFactory *factory.ConfigFactory, destro
 
 func makeNodes(c client.Interface, nodeCount int) {
 	glog.Infof("making %d nodes", nodeCount)
-	baseNode := &api.Node{
+	computeNode := &api.Node{
 		ObjectMeta: api.ObjectMeta{
-			GenerateName: "scheduler-test-node-",
+			GenerateName: "scheduler-cpu-node-",
 		},
 		Spec: api.NodeSpec{
 			ExternalID: "foobar",
 		},
 		Status: api.NodeStatus{
 			Capacity: api.ResourceList{
-				api.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
-				api.ResourceCPU:    resource.MustParse("20"),
+				api.ResourcePods:   *resource.NewQuantity(20, resource.DecimalSI),
+				api.ResourceCPU:    resource.MustParse("24"),
 				api.ResourceMemory: resource.MustParse("20Gi"),
+			},
+			Phase: api.NodeRunning,
+			Conditions: []api.NodeCondition{
+				{Type: api.NodeReady, Status: api.ConditionTrue},
+			},
+		},
+	}
+	memNode := &api.Node{
+		ObjectMeta: api.ObjectMeta{
+			GenerateName: "scheduler-mem-node-",
+		},
+		Spec: api.NodeSpec{
+			ExternalID: "foobar",
+		},
+		Status: api.NodeStatus{
+			Capacity: api.ResourceList{
+				api.ResourcePods:   *resource.NewQuantity(20, resource.DecimalSI),
+				api.ResourceCPU:    resource.MustParse("16"),
+				api.ResourceMemory: resource.MustParse("40Gi"),
 			},
 			Phase: api.NodeRunning,
 			Conditions: []api.NodeCondition{
@@ -111,8 +130,14 @@ func makeNodes(c client.Interface, nodeCount int) {
 	}
 
 	for i := 0; i < nodeCount; i++ {
-		if _, err := c.Nodes().Create(baseNode); err != nil {
-			panic("error creating node: " + err.Error())
+		if nodeCount%2 == 0 {
+			if _, err := c.Nodes().Create(memNode); err != nil {
+				panic("error creating node: " + err.Error())
+			}
+		} else {
+			if _, err := c.Nodes().Create(computeNode); err != nil {
+				panic("error creating node: " + err.Error())
+			}
 		}
 	}
 }
@@ -169,6 +194,42 @@ func makePodSpec(name string) api.PodSpec {
 					Requests: api.ResourceList{
 						api.ResourceCPU:    resource.MustParse("8"),
 						api.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			}},
+		}
+	case "spark":
+		return api.PodSpec{
+			Containers: []api.Container{{
+				Name:  "pod-spark",
+				Image: "gcr.io/google_containers/pause:1.0",
+				Ports: []api.ContainerPort{{ContainerPort: 80}},
+				Resources: api.ResourceRequirements{
+					Limits: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("2"),
+						api.ResourceMemory: resource.MustParse("2Gi"),
+					},
+					Requests: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("2"),
+						api.ResourceMemory: resource.MustParse("2Gi"),
+					},
+				},
+			}},
+		}
+	case "waf":
+		return api.PodSpec{
+			Containers: []api.Container{{
+				Name:  "pod-waf",
+				Image: "gcr.io/google_containers/pause:1.0",
+				Ports: []api.ContainerPort{{ContainerPort: 80}},
+				Resources: api.ResourceRequirements{
+					Limits: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("1"),
+						api.ResourceMemory: resource.MustParse("1Gi"),
+					},
+					Requests: api.ResourceList{
+						api.ResourceCPU:    resource.MustParse("1"),
+						api.ResourceMemory: resource.MustParse("1Gi"),
 					},
 				},
 			}},
